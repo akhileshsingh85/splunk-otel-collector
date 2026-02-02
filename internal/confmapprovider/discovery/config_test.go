@@ -102,6 +102,7 @@ func TestReceiverEntryPaths(t *testing.T) {
 	assert.True(t, isReceiverEntryPath(fmt.Sprintf(".%creceivers%cany.thing.at.all.discovery.yml", os.PathSeparator, os.PathSeparator)))
 	assert.True(t, isReceiverEntryPath(fmt.Sprintf(".%creceivers%cany.thing.at.all.discovery.yaml", os.PathSeparator, os.PathSeparator)))
 }
+
 func TestDiscoveryObserverEntryPaths(t *testing.T) {
 	assert.False(t, isDiscoveryObserverEntryPath(fmt.Sprintf("%cextensions%cany.yml", os.PathSeparator, os.PathSeparator)))
 	assert.False(t, isDiscoveryObserverEntryPath(fmt.Sprintf("%cextensions%cany.thing.at.all.yaml", os.PathSeparator, os.PathSeparator)))
@@ -261,14 +262,13 @@ var expectedConfig = Config{
 				},
 			},
 		},
-		component.MustNewIDWithName("smartagent", "collectd/redis"): {
+		component.MustNewID("redis"): {
 			Rule: map[component.ID]string{
 				component.MustNewID("docker_observer"): `type == "container" and port == 6379`,
 			},
 
 			Config: map[component.ID]map[string]any{
 				defaultType: {
-					"type": "collectd/redis",
 					"auth": "password",
 				},
 				component.MustNewID("docker_observer"): {
@@ -281,7 +281,7 @@ var expectedConfig = Config{
 						"successful": []any{
 							map[any]any{
 								"regexp":  ".*",
-								"message": "smartagent/collectd-redis receiver successful metric status",
+								"message": "redis receiver successful metric status",
 							},
 						},
 					},
@@ -300,8 +300,8 @@ var expectedConfig = Config{
 							map[any]any{
 								"regexp": "^redis_info plugin: Error .* - RedisError\\('-(WRONGPASS|NOAUTH|ERR AUTH).*$",
 								"message": "Please ensure that your redis password is correctly specified in " +
-									"`splunk.discovery.receivers.smartagent/collectd/redis.config.auth` or via the " +
-									"`SPLUNK_DISCOVERY_RECEIVERS_SMARTAGENT_COLLECTD_REDIS_CONFIG_AUTH` environment variable.",
+									"`splunk.discovery.receivers.redis/redis.config.auth` or via the " +
+									"`SPLUNK_DISCOVERY_RECEIVERS_REDIS_CONFIG_AUTH` environment variable.",
 							},
 						},
 					},
@@ -352,10 +352,13 @@ var expectedServiceConfig = map[string]any{
 		"extensions": []any{"zpages"},
 		"pipelines": map[string]any{
 			"metrics": map[string]any{
-				"exporters": []any{"debug"}}},
+				"exporters": []any{"debug"},
+			},
+		},
 		"telemetry": map[string]any{
 			"logs": map[string]any{
-				"level": "debug"},
+				"level": "debug",
+			},
 		},
 	},
 }

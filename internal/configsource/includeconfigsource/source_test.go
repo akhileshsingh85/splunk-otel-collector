@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
+	"go.uber.org/zap"
 )
 
 func TestIncludeConfigSource_Session(t *testing.T) {
@@ -63,15 +64,15 @@ func TestIncludeConfigSource_Session(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := newConfigSource(&Config{})
+			s, err := newConfigSource(&Config{}, zap.NewNop())
 			require.NoError(t, err)
 
 			ctx := context.Background()
 			file := path.Join("testdata", tt.selector)
 			r, err := s.Retrieve(ctx, file, confmap.NewFromStringMap(tt.params), nil)
 			if tt.wantErr != nil {
+				require.Error(t, err)
 				assert.Nil(t, r)
-				require.IsType(t, tt.wantErr, err)
 				return
 			}
 			require.NoError(t, err)
@@ -86,17 +87,14 @@ func TestIncludeConfigSource_Session(t *testing.T) {
 }
 
 func TestIncludeConfigSourceWatchFileClose(t *testing.T) {
-	s, err := newConfigSource(&Config{WatchFiles: true})
+	s, err := newConfigSource(&Config{WatchFiles: true}, zap.NewNop())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
 	// Write out an initial test file
-	f, err := os.CreateTemp("", "watch_file_test")
+	f, err := os.CreateTemp(t.TempDir(), "watch_file_test")
 	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, os.Remove(f.Name()))
-	}()
-	_, err = f.Write([]byte("val1"))
+	_, err = f.WriteString("val1")
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
 
@@ -116,13 +114,13 @@ func TestIncludeConfigSourceWatchFileClose(t *testing.T) {
 }
 
 func TestIncludeConfigSource_WatchFileUpdate(t *testing.T) {
-	s, err := newConfigSource(&Config{WatchFiles: true})
+	s, err := newConfigSource(&Config{WatchFiles: true}, zap.NewNop())
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
 	// Write out an initial test file
 	dst := path.Join(t.TempDir(), "watch_file_test")
-	require.NoError(t, os.WriteFile(dst, []byte("val1"), 0600))
+	require.NoError(t, os.WriteFile(dst, []byte("val1"), 0o600))
 
 	// Perform initial retrieve
 	watchChannel := make(chan *confmap.ChangeEvent, 1)
@@ -143,7 +141,7 @@ func TestIncludeConfigSource_WatchFileUpdate(t *testing.T) {
 	assert.Equal(t, "val1", val)
 
 	// Write update to file
-	require.NoError(t, os.WriteFile(dst, []byte("val2"), 0600))
+	require.NoError(t, os.WriteFile(dst, []byte("val2"), 0o600))
 
 	ce := <-watchChannel
 	watchDone <- struct{}{}
@@ -162,7 +160,7 @@ func TestIncludeConfigSource_WatchFileUpdate(t *testing.T) {
 }
 
 func TestIncludeConfigSourceDeleteFile(t *testing.T) {
-	s, err := newConfigSource(&Config{DeleteFiles: true})
+	s, err := newConfigSource(&Config{DeleteFiles: true}, zap.NewNop()) // SA1019: deprecated DeleteFiles
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -170,7 +168,7 @@ func TestIncludeConfigSourceDeleteFile(t *testing.T) {
 	contents, err := os.ReadFile(path.Join("testdata", "scalar_data_file"))
 	require.NoError(t, err)
 	dst := path.Join(t.TempDir(), "copy_scalar_data_file")
-	require.NoError(t, os.WriteFile(dst, contents, 0600))
+	require.NoError(t, os.WriteFile(dst, contents, 0o600))
 
 	ctx := context.Background()
 	r, err := s.Retrieve(ctx, dst, nil, func(event *confmap.ChangeEvent) {
@@ -193,14 +191,14 @@ func TestIncludeConfigSource_DeleteFileError(t *testing.T) {
 		t.Skip("Windows only test")
 	}
 
-	s, err := newConfigSource(&Config{DeleteFiles: true})
+	s, err := newConfigSource(&Config{DeleteFiles: true}, zap.NewNop()) // SA1019: deprecated DeleteFiles
 	require.NoError(t, err)
 
 	// Copy test file
 	contents, err := os.ReadFile(path.Join("testdata", "scalar_data_file"))
 	require.NoError(t, err)
 	dst := path.Join("testdata", "copy_scalar_data_file")
-	require.NoError(t, os.WriteFile(dst, contents, 0600))
+	require.NoError(t, os.WriteFile(dst, contents, 0o600))
 	f, err := os.OpenFile(dst, os.O_RDWR, 0)
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -210,6 +208,7 @@ func TestIncludeConfigSource_DeleteFileError(t *testing.T) {
 
 	ctx := context.Background()
 	r, err := s.Retrieve(ctx, dst, nil, nil)
-	assert.IsType(t, &errFailedToDeleteFile{}, err)
+	var targetErr *errFailedToDeleteFile
+	require.ErrorAs(t, err, &targetErr)
 	assert.Nil(t, r)
 }

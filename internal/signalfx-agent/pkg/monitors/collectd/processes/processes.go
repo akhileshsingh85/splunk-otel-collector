@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 package processes
 
@@ -63,5 +62,5 @@ func (m *Monitor) Configure(conf *Config) error {
 		// get top level configuration for /proc path
 		conf.ProcFSPath = hostfs.HostProc()
 	}
-	return m.SetConfigurationAndRun(conf)
+	return m.SetConfigurationAndRun(conf, collectd.WithDeprecationWarningLog("hostmetricsreceiver"))
 }

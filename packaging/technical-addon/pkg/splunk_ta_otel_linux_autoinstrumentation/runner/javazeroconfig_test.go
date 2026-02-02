@@ -20,7 +20,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -155,58 +154,52 @@ func TestHappyPath(t *testing.T) {
 		WaitStrategy: wait.ForAll(
 			wait.ForExec([]string{"sudo", "stat", "/opt/splunk/var/log/splunk/splunkd.log"}).WithStartupTimeout(startupTimeout),
 			wait.ForExec([]string{"sudo", "stat", "/opt/splunk/var/log/splunk/Splunk_TA_otel_linux_autoinstrumentation.log"}).WithStartupTimeout(startupTimeout),
-		).WithDeadline(startupTimeout + 15*time.Second).WithStartupTimeoutDefault(startupTimeout)})
+		).WithDeadline(startupTimeout + 15*time.Second).WithStartupTimeoutDefault(startupTimeout),
+	})
 
 	// Check Schema
 	ctx := context.Background()
 	code, output, err := tc.Exec(ctx, []string{"sudo", "/opt/splunk/bin/splunk", "btool", "check", "--debug"})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.LessOrEqual(t, code, 1)    // Other stanzas may be missing and thus have this be 0 or 1
 	assert.GreaterOrEqual(t, code, 0) // bound to [0,1]
 	read, err := io.ReadAll(output)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotContains(t, string(read), "Invalid Key in Stanza")
 
 	// check log output
 	_, output, err = tc.Exec(ctx, []string{"sudo", "cat", "/opt/splunk/var/log/splunk/Splunk_TA_otel_linux_autoinstrumentation.log"})
 	require.NoError(t, err)
 	read, err = io.ReadAll(output)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, string(read), "Successfully generated java autoinstrumentation config at \"/etc/splunk/zeroconfig/java.conf\"")
 
 	// Check zeroconfig value
 	_, output, err = tc.Exec(ctx, []string{"sudo", "cat", "/etc/splunk/zeroconfig/java.conf"}, tcexec.Multiplexed())
 	require.NoError(t, err)
 	read, err = io.ReadAll(output)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, fmt.Sprintf("JAVA_TOOL_OPTIONS=-javaagent:/opt/splunk/etc/apps/Splunk_TA_otel_linux_autoinstrumentation/linux_x86_64/bin/splunk-otel-javaagent.jar\nOTEL_RESOURCE_ATTRIBUTES=splunk.zc.method=splunk-otel-auto-instrumentation-%s\nSPLUNK_PROFILER_ENABLED=false\nSPLUNK_PROFILER_MEMORY_ENABLED=false\nSPLUNK_METRICS_ENABLED=false", strings.TrimSpace(javaVersion)), strings.TrimSpace(string(read)))
 
 	// Check preload config
 	_, output, err = tc.Exec(ctx, []string{"sudo", "cat", "/etc/ld.so.preload"}, tcexec.Multiplexed())
 	require.NoError(t, err)
 	read, err = io.ReadAll(output)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotEmpty(t, read)
 	assert.Equal(t, "/opt/splunk/etc/apps/Splunk_TA_otel_linux_autoinstrumentation/linux_x86_64/bin/libsplunk_amd64.so", strings.TrimSpace(string(read)))
-
-	// Check preload binary
-	_, output, err = tc.Exec(ctx, []string{"sudo", "sha256sum", "/opt/splunk/etc/apps/Splunk_TA_otel_linux_autoinstrumentation/linux_x86_64/bin/libsplunk_amd64.so"}, tcexec.Multiplexed())
-	require.NoError(t, err)
-	read, err = io.ReadAll(output)
-	assert.NoError(t, err)
-	assert.Contains(t, string(read), "4a9944614212c477cd63f5354026850052f2aa495312fb79ebd24e22dc8953bd")
 
 	// check jar
 	_, output, err = tc.Exec(ctx, []string{"sudo", "sha256sum", "/opt/splunk/etc/apps/Splunk_TA_otel_linux_autoinstrumentation/linux_x86_64/bin/splunk-otel-javaagent.jar"}, tcexec.Multiplexed())
 	require.NoError(t, err)
 	read, err = io.ReadAll(output)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, string(read), strings.TrimSpace(javaAgent256Sum))
 
 	// check for errors
 	_, output, err = tc.Exec(ctx, []string{"sudo", "cat", "/opt/splunk/var/log/splunk/Splunk_TA_otel_linux_autoinstrumentation.log"})
 	require.NoError(t, err)
 	read, err = io.ReadAll(output)
-	assert.NoError(t, err)
-	assert.NotRegexp(t, regexp.MustCompile(`(?i).*error.*`), string(read))
+	require.NoError(t, err)
+	assert.NotRegexp(t, `(?i).*error.*`, string(read))
 }

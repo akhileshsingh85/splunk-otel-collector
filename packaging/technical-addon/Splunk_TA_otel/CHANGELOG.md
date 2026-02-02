@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## v1.11.0
+
+- Updates addon to use collector version v0.143.0
+
+## v1.10.0
+
+- Updates addon to use collector version v0.142.0
+
+## v1.9.0
+
+- Updates addon to use collector version v0.141.0
+
+## v1.8.0
+
+- Updates addon to use collector version v0.140.0
+
 ## v1.7.0
 
 - Updates addon to use collector version v0.137.0

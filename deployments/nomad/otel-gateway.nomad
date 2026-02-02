@@ -146,6 +146,12 @@ extensions:
   http_forwarder:
     egress:
       endpoint: https://api.${SPLUNK_REALM}.signalfx.com
+  http_forwarder/signalfx:
+    ingress:
+      endpoint: 0.0.0.0:9943
+      include_metadata: true
+    egress:
+      endpoint: https://ingest.${SPLUNK_REALM}.signalfx.com
   zpages: null
 receivers:
   jaeger:
@@ -160,9 +166,6 @@ receivers:
         endpoint: 0.0.0.0:4317
       http:
         endpoint: 0.0.0.0:4318
-  signalfx:
-    include_metadata: true
-    endpoint: 0.0.0.0:9943
   zipkin:
     endpoint: 0.0.0.0:9411
   prometheus/collector:
@@ -191,7 +194,7 @@ exporters:
     ingest_url: https://ingest.${SPLUNK_REALM}.signalfx.com
   debug:
     verbosity: detailed
-  otlphttp:
+  otlp_http:
     traces_endpoint: "https://ingest.${SPLUNK_REALM}.signalfx.com/v2/trace/otlp"
     headers:
       "X-SF-Token": "${SPLUNK_ACCESS_TOKEN}"
@@ -199,17 +202,9 @@ service:
   extensions:
   - health_check
   - http_forwarder
+  - http_forwarder/signalfx
   - zpages
   pipelines:
-    logs/signalfx-events:
-      exporters:
-      - signalfx
-      - debug
-      processors:
-      - memory_limiter
-      - batch
-      receivers:
-      - signalfx
     metrics:
       exporters:
       - signalfx
@@ -219,10 +214,9 @@ service:
       - batch
       receivers:
       - otlp
-      - signalfx
     traces:
       exporters:
-      - otlphttp
+      - otlp_http
       - debug
       processors:
       - memory_limiter

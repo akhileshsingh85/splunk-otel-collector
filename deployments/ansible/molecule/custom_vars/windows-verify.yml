@@ -34,45 +34,14 @@
       check_mode: yes
       register: service_status
 
-    - name: Check fluentdwinsvc service
-      ansible.windows.win_service:
-        name: fluentdwinsvc
-        state: started
-      check_mode: yes
-      register: service_status
-
-    - name: Assert fluentdwinsvc service status
-      assert:
-        that: not service_status.changed
-
     - name: Check custom_config.yml
       ansible.windows.win_stat:
-        path: '{{ansible_env.ProgramData}}\Splunk\OpenTelemetry Collector\custom_config.yml'
+        path: '{{ ansible_env.ProgramData }}\Splunk\OpenTelemetry Collector\custom_config.yml'
       register: custom_collector_config
 
     - name: Assert custom_config.yml exists
-      assert:
+      ansible.builtin.assert:
         that: custom_collector_config.stat.exists
-
-    - name: Check fluentd custom_config.conf
-      ansible.windows.win_stat:
-        path: '{{ansible_env.ProgramFiles}}\Splunk\OpenTelemetry Collector\fluentd\custom_config.conf'
-        get_checksum: yes
-      register: custom_fluentd_config
-
-    - name: Assert fluentd custom_config.conf exists
-      assert:
-        that: custom_fluentd_config.stat.exists
-
-    - name: Check td-agent.conf exists
-      ansible.windows.win_stat:
-        path: '{{ansible_env.SystemDrive}}\opt\td-agent\etc\td-agent\td-agent.conf'
-        get_checksum: yes
-      register: td_agent_config
-
-    - name: Assert fluentd custom_config.conf is used
-      assert:
-        that: custom_fluentd_config.stat.checksum == td_agent_config.stat.checksum
 
     - name: Get IIS env vars
       ansible.windows.win_reg_stat:
@@ -81,7 +50,7 @@
       register: iis_env
 
     - name: Verify IIS env vars
-      assert:
+      ansible.builtin.assert:
         that: (item.key + '=' + (item.value | string)) in iis_env.value
       loop: "{{ iis_reg_values | dict2items }}"
 
@@ -92,7 +61,7 @@
       register: collector_env
 
     - name: Verify splunk-otel-collector service env vars
-      assert:
+      ansible.builtin.assert:
         that: (item.key + '=' + (item.value | string)) in collector_env.value
       loop: "{{ collector_reg_values | dict2items }}"
 
@@ -103,6 +72,6 @@
       register: collector_imagepath
 
     - name: Assert service ImagePath ends with the splunk_otel_collector_command_line_args value used in the playbook
-      assert:
+      ansible.builtin.assert:
         that:
           - collector_imagepath.value.endswith("--discovery --set=processors.batch.timeout=10s")

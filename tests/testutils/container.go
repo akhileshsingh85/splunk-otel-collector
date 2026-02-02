@@ -19,6 +19,7 @@ package testutils
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"runtime/debug"
@@ -30,7 +31,6 @@ import (
 	dockernetwork "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/exec"
@@ -282,7 +282,7 @@ func (container *Container) Start(ctx context.Context) (err error) {
 	}()
 
 	if container.req == nil {
-		return fmt.Errorf("cannot start a container that hasn't been built")
+		return errors.New("cannot start a container that hasn't been built")
 	}
 
 	req := testcontainers.GenericContainerRequest{
@@ -290,7 +290,7 @@ func (container *Container) Start(ctx context.Context) (err error) {
 		Started:          true,
 	}
 
-	err = container.createNetworksIfNecessary()
+	err = container.createNetworksIfNecessary(ctx)
 	if err != nil {
 		return nil
 	}
@@ -298,7 +298,7 @@ func (container *Container) Start(ctx context.Context) (err error) {
 	var started testcontainers.Container
 	started, err = testcontainers.GenericContainer(ctx, req)
 	container.container = &started
-	return
+	return err
 }
 
 func (container *Container) assertStarted(operation string) error {
@@ -440,14 +440,14 @@ func (container *Container) ContainerIPs(ctx context.Context) ([]string, error) 
 	return (*container.container).ContainerIPs(ctx)
 }
 
-func (container *Container) CopyDirToContainer(ctx context.Context, hostDirPath string, containerParentPath string, fileMode int64) error {
+func (container *Container) CopyDirToContainer(ctx context.Context, hostDirPath, containerParentPath string, fileMode int64) error {
 	if err := container.assertStarted("CopyDirToContainer"); err != nil {
 		return err
 	}
 	return (*container.container).CopyDirToContainer(ctx, hostDirPath, containerParentPath, fileMode)
 }
 
-func (container *Container) CopyFileToContainer(ctx context.Context, hostFilePath string, containerFilePath string, fileMode int64) error {
+func (container *Container) CopyFileToContainer(ctx context.Context, hostFilePath, containerFilePath string, fileMode int64) error {
 	if err := container.assertStarted("CopyFileToContainer"); err != nil {
 		return err
 	}
@@ -481,25 +481,23 @@ func (container *Container) CopyFileFromContainer(ctx context.Context, filePath 
 
 // AssertExec will assert that the exec'ed command completes within the specified timeout, returning
 // the return code and demuxed stdout and stderr
-func (container *Container) AssertExec(t testing.TB, timeout time.Duration, cmd ...string) (rc int, stdout, stderr string) {
+func (container *Container) AssertExec(tb testing.TB, timeout time.Duration, cmd ...string) (rc int, stdout, stderr string) {
 	var err error
 	var reader io.Reader
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	rc, reader, err = container.Exec(ctx, cmd)
-	assert.NoError(t, err)
-	require.NotNil(t, reader)
+	require.NoError(tb, err)
+	require.NotNil(tb, reader)
 	var sout, serr bytes.Buffer
 	_, err = stdcopy.StdCopy(&sout, &serr, reader)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return rc, sout.String(), serr.String()
 }
 
 // Will create any networks that don't already exist on system.
 // Teardown/cleanup is handled by the testcontainers reaper.
-func (container *Container) createNetworksIfNecessary() error {
-	ctx := context.Background()
-
+func (container *Container) createNetworksIfNecessary(ctx context.Context) error {
 	// Use the client to check if the networks already exist.
 	client, err := testcontainers.NewDockerClientWithOpts(ctx)
 	if err != nil {

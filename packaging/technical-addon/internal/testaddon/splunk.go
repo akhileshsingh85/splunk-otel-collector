@@ -16,7 +16,6 @@ package testaddon
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,11 +82,12 @@ func StartSplunk(t *testing.T, startOpts SplunkStartOpts) testcontainers.Contain
 			c.AutoRemove = true // change to false for debugging
 		},
 		Env: map[string]string{
-			"SPLUNK_START_ARGS": "--accept-license",
-			"SPLUNK_PASSWORD":   "Chang3d!",
-			"SPLUNK_APPS_URL":   splunkStartURL,
-			"SPLUNK_USER":       startOpts.SplunkUser,
-			"SPLUNK_GROUP":      startOpts.SplunkGroup,
+			"SPLUNK_GENERAL_TERMS": "--accept-sgt-current-at-splunk-com",
+			"SPLUNK_START_ARGS":    "--accept-license",
+			"SPLUNK_PASSWORD":      "Chang3d!",
+			"SPLUNK_APPS_URL":      splunkStartURL,
+			"SPLUNK_USER":          startOpts.SplunkUser,
+			"SPLUNK_GROUP":         startOpts.SplunkGroup,
 		},
 		WaitingFor: wait.ForAll(
 			wait.NewHTTPStrategy("/en-US/account/login").WithPort("8000").WithStartupTimeout(startOpts.Timeout),
@@ -138,14 +138,14 @@ func PackAddon(t *testing.T, defaultModInputs *modularinput.GenericModularInput,
 	err = repackFunc(t, packedDir)
 	require.NoError(t, err)
 
-	addonPath := filepath.Join(t.TempDir(), fmt.Sprintf("%s.tgz", defaultModInputs.SchemaName))
+	addonPath := filepath.Join(t.TempDir(), defaultModInputs.SchemaName+".tgz")
 	err = packaging.PackageAddon(packedDir, addonPath)
 	require.NoError(t, err)
 
 	return addonPath
 }
 
-func AssertFileShasEqual(t *testing.T, expected string, actual string) {
+func AssertFileShasEqual(t *testing.T, expected, actual string) {
 	expectedSum, err := packaging.Sha256Sum(expected)
 	require.NoError(t, err)
 	actualSum, err := packaging.Sha256Sum(actual)

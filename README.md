@@ -5,8 +5,6 @@
     <a href="#getting-started">Getting Started</a>
     &nbsp;&nbsp;&bull;&nbsp;&nbsp;
     <a href="CONTRIBUTING.md">Getting Involved</a>
-    &nbsp;&nbsp;&bull;&nbsp;&nbsp;
-    <a href="docs/signalfx-smart-agent-migration.md">Migrating from Smart Agent</a>
   </strong>
 </p>
 
@@ -49,7 +47,7 @@ provides a unified way to receive, process, and export metric, trace, and log
 data for [Splunk Observability Cloud](https://www.splunk.com/en_us/products/observability.html):
 
 - [Splunk APM](https://docs.splunk.com/Observability/apm/intro-to-apm.html#nav-Introduction-to-Splunk-APM) via the
-  [`otlphttp`
+  [`otlp_http`
   exporter](https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter).
   More information available
   [here](https://docs.splunk.com/Observability/gdi/opentelemetry/opentelemetry.html#nav-Install-and-configure-Splunk-Distribution-of-OpenTelemetry-Collector).

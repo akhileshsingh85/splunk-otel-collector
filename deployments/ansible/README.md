@@ -12,11 +12,11 @@ Observability Cloud](https://www.splunk.com/en_us/products/observability.html).
 
 Currently, the following Linux distributions and versions are supported:
 
-- Amazon Linux: 2, 2023 (**Note:** Log collection with Fluentd not currently supported for Amazon Linux 2023.)
+- Amazon Linux: 2, 2023
 - CentOS / Red Hat: 8, 9
 - Oracle: 8, 9
 - Debian: 9, 10, 11
-- SUSE: 15 (**Note:** Only for collector versions v0.34.0 or higher. Log collection with Fluentd not currently supported.)
+- SUSE: 15
 - Ubuntu: 16.04, 18.04, 20.04, 22.04
 
 ## Windows
@@ -57,7 +57,7 @@ Note that this role requires root access.
   # "The Powershell family is incompatible with the sudo become plugin". Remove "become: yes" tag to run on Windows
   tasks:
     - name: "Include splunk_otel_collector"
-      include_role:
+      ansible.builtin.include_role:
         name: "signalfx.splunk_otel_collector.collector"
       vars:
         splunk_access_token: YOUR_ACCESS_TOKEN

@@ -31,11 +31,13 @@ type ModInput struct {
 }
 
 // TransformerFunc is basically a reducer.. takes in "working" value of modinput string
-type TransformerFunc func(value string) (string, error)
-type ModinputProcessor struct {
-	ModularInputs map[string]*ModInput
-	SchemaName    string
-}
+type (
+	TransformerFunc   func(value string) (string, error)
+	ModinputProcessor struct {
+		ModularInputs map[string]*ModInput
+		SchemaName    string
+	}
+)
 
 func (t *ModInput) TransformInputs(value string) (string, error) {
 	t.Value = value
@@ -64,14 +66,14 @@ func (mip *ModinputProcessor) ProcessXML(modInput *XMLInput) error {
 	providedInputs := make(map[string]bool)
 
 	for _, stanza := range modInput.Configuration.Stanzas {
-		stanzaPrefix := fmt.Sprintf("%s://", mip.SchemaName)
+		stanzaPrefix := mip.SchemaName + "://"
 
 		if strings.HasPrefix(stanza.Name, stanzaPrefix) {
 			for _, param := range stanza.Params {
 				if input, exists := mip.ModularInputs[param.Name]; exists {
 					value, err := input.TransformInputs(param.Value)
 					if err != nil {
-						return fmt.Errorf("transform failed for input %s: %s", param.Name, err)
+						return fmt.Errorf("transform failed for input %s: %w", param.Name, err)
 					}
 					input.Value = value
 				}
@@ -93,8 +95,8 @@ func (mip *ModinputProcessor) GetFlags() []string {
 	sort.Strings(keys)
 	for _, modinputName := range keys {
 		modularInput := mip.ModularInputs[modinputName]
-		if "" != modularInput.Config.Flag.Name {
-			flags = append(flags, fmt.Sprintf("--%s", modularInput.Config.Flag.Name))
+		if modularInput.Config.Flag.Name != "" {
+			flags = append(flags, "--"+modularInput.Config.Flag.Name)
 			if !modularInput.Config.Flag.IsUnary {
 				flags = append(flags, modularInput.Value)
 			}

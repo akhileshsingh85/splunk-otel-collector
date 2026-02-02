@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: 1.24.6
+  GO_VERSION: 1.25.5
 
 jobs:
   tidy:
@@ -84,22 +84,26 @@ jobs:
       - uses: actions/checkout@v5
       - name: Download actionlint
         id: get_actionlint
-        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/03d0035/scripts/download-actionlint.bash) # v1.7.7
+        run: bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/0933c14/scripts/download-actionlint.bash) # v1.7.10
         shell: bash
       - name: Check workflow files
         run: ${{ steps.get_actionlint.outputs.executable }} -color
         shell: bash
 
   test:
-    name: unit-test
+    name: test-${{ matrix.OS }}-race_detection:${{ matrix.TEST_RACE }}-coverage:${{ !matrix.TEST_RACE }}
     strategy:
       matrix:
-        # The "macos-13-xlarge" runner is arm64: https://github.com/actions/runner-images/issues/8439
-        OS: [ "ubuntu-24.04", "macos-13", "macos-13-xlarge", "macos-14", "macos-15" ]
+        OS: [ "ubuntu-24.04", "macos-14", "macos-15", "windows-2025", "windows-11-arm" ]
+        TEST_RACE: [ true, false ]
+        exclude:
+          - OS: "windows-11-arm"
+            TEST_RACE: true
     uses: ./.github/workflows/reusable-unit-test.yml
     with:
       OS: ${{ matrix.OS }}
-      COVERAGE: true
+      COVERAGE: ${{ !matrix.TEST_RACE }} # No coverage when running with race
+      TEST_RACE: ${{ matrix.TEST_RACE }}
     secrets: inherit
 
   coverage:
@@ -112,7 +116,7 @@ jobs:
       - uses: ./.github/actions/setup-environment
 
       - name: Run Unit Tests With Coverage
-        run: make gotest-with-codecov
+        run: COVER_TESTING=true make gotest-with-codecov
 
       - name: Upload coverage report
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # 5.5.1
@@ -129,3 +133,15 @@ jobs:
     uses: ./.github/workflows/reusable-compile.yml
     with:
       SYS_BINARY: ${{ matrix.SYS_BINARIES }}
+
+  latest-dockerd-test:
+    # Run this as a separate test to avoid affecting other tests with the dockerd upgrade.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-environment
+
+      - name: dockerd test
+        working-directory: ./internal/signalfx-agent/pkg/monitors/docker
+        run: |
+          go test -v -tags=dockerd -timeout 3m ./...

@@ -10,7 +10,7 @@ variables:
   RELEASE_VERSION:
     value: ""
     description: "Version to release (must be in format v1.2.3)"
-  GO_VERSION: 1.24.6
+  GO_VERSION: 1.25.5
   WIN_2019_BASE_IMAGE: mcr.microsoft.com/windows/servercore:ltsc2019
   WIN_2022_BASE_IMAGE: mcr.microsoft.com/windows/servercore:ltsc2022
   SPLUNK_OTELCOL_DOWNLOAD_BASE:
@@ -80,22 +80,6 @@ manual_release_trigger:
       when: on_success
   allow_failure: false
   needs: []
-
-semgrep:
-  stage: sast-oss-scan
-  extends: .sast_scan
-  retry: 2
-  variables:
-    SAST_SCANNER: "Semgrep"
-    SEMGREP_EXCLUDE: "examples,tests,*_test.go,cmd/otelcol/Dockerfile.windows,deployments/ansible/molecule"
-    alert_mode: "policy"
-  after_script:
-    - echo "Check results at $CI_PIPELINE_URL/security"
-  only:
-    - main
-    - schedules
-  needs: []
-  dependencies: []
 
 fossa:
   extends: .oss-scan
@@ -292,6 +276,7 @@ update-openjdk:
   needs: []
   dependencies: []
   script:
+    - .gitlab/install-yq.sh
     - .gitlab/install-gh-cli.sh
     - .gitlab/update-openjdk.sh
 
@@ -304,6 +289,7 @@ update-javaagent:
   needs: []
   dependencies: []
   script:
+    - .gitlab/install-yq.sh
     - .gitlab/install-gh-cli.sh
     - .gitlab/update-javaagent.sh
 
@@ -316,6 +302,7 @@ update-jmx-metrics-gatherer:
   needs: []
   dependencies: []
   script:
+    - .gitlab/install-yq.sh
     - .gitlab/install-gh-cli.sh
     - .gitlab/update-jmx-metrics-gatherer.sh
 
@@ -331,6 +318,7 @@ update-nodejs-agent:
     - !reference [.go-cache, before_script]
     - apt update && apt install -y jq
   script:
+    - .gitlab/install-yq.sh
     - .gitlab/install-gh-cli.sh
     - .gitlab/update-nodejs-agent.sh
 
@@ -343,6 +331,7 @@ update-dotnet-agent:
   needs: []
   dependencies: []
   script:
+    - .gitlab/install-yq.sh
     - .gitlab/install-gh-cli.sh
     - .gitlab/update-dotnet-agent.sh
 
@@ -381,14 +370,12 @@ compile:
       fi
   after_script:
     - if [ -e bin/otelcol ]; then rm -f bin/otelcol; fi  # remove the symlink
-    - if [ -e bin/migratecheckpoint ]; then rm -f bin/migratecheckpoint; fi  # remove the symlink
   artifacts:
     paths:
       - bin/otelcol_*
-      - bin/migratecheckpoint_*
 
 otelcol-fips:
-  image: '${DOCKER_CICD_REPO}/ci-container/golang-1.24:4.0.0'
+  image: '${DOCKER_CICD_REPO}/ci-container/golang-1.25:4.3.1'
   extends:
     - .trigger-filter
   stage: build
@@ -475,12 +462,13 @@ agent-bundle-linux:
 
 agent-bundle-windows:
   extends: .trigger-filter
+  image: mcr.microsoft.com/windows/servercore:ltsc2022
   stage: build
   needs:
     - job: manual_release_trigger
       optional: true
   tags:
-    - splunk-otel-collector-windows
+    - windows2022
   variables:
     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   cache:
@@ -882,6 +870,7 @@ build-tar:
 
 build-msi:
   extends: .trigger-filter
+  image: mcr.microsoft.com/windows/servercore:ltsc2022
   stage: package
   needs:
     - sign-exe
@@ -892,8 +881,12 @@ build-msi:
     - New-Item -Path bin -ItemType Directory -Force 
     - Copy-Item -Force dist/signed/otelcol_windows_amd64.exe bin/otelcol_windows_amd64.exe
   tags:
-    - splunk-otel-collector-windows
+    - windows2022
   script:
+    - . .gitlab/windows/runner-setup-helpers.ps1
+    - Install-Chocolatey
+    - Install-WiXToolset
+    - Install-Git
     - |
       # Equivalent of: VERSION_TAG="${RELEASE_VERSION:-${CI_COMMIT_TAG:-}}"
       if (-not [string]::IsNullOrEmpty($env:RELEASE_VERSION)) {
@@ -911,13 +904,18 @@ build-msi:
 
 msi-custom-actions-package:
   extends: .trigger-filter
+  image: mcr.microsoft.com/windows/servercore:ltsc2022
   stage: package
   needs:
     - job: msi-custom-actions-assemblies
       artifacts: true
   tags:
-    - splunk-otel-collector-windows
+    - windows2022
   script:
+    - . .gitlab/windows/runner-setup-helpers.ps1
+    - Install-Chocolatey
+    - Install-WiXToolset
+    # Set environment variables for building custom actions
     - $WixPath = "${Env:ProgramFiles(x86)}\WiX Toolset v3.14"
     - $sfxcaDll = "${WixPath}\SDK\x64\sfxca.dll"
     - $Env:PATH = "${WixPath}\SDK;" + $Env:PATH
@@ -1254,14 +1252,18 @@ build-push-windows-image:
     - sign-exe
     - agent-bundle-windows
   tags:
-    - splunk-otel-collector-windows${WIN_VERSION}
+    - windows${WIN_VERSION}
+  image: mcr.microsoft.com/windows/servercore:ltsc${WIN_VERSION}
   retry: 2
   variables:
     ErrorActionPreference: stop
   before_script:
+    - . .gitlab/windows/runner-setup-helpers.ps1
+    - Install-Chocolatey
+    - Install-DockerCli
     - Copy-Item .\dist\signed\otelcol_windows_amd64.exe .\cmd\otelcol\otelcol.exe
     - Copy-Item .\dist\agent-bundle_windows_amd64.zip .\cmd\otelcol\agent-bundle_windows_amd64.zip
-    - &get-base-image |
+    - |
       if ($env:WIN_VERSION -eq "2019") {
         $BASE_IMAGE = $env:WIN_2019_BASE_IMAGE
       } else {
@@ -1270,15 +1272,6 @@ build-push-windows-image:
     - |
       docker pull $BASE_IMAGE
       if ($LASTEXITCODE -ne 0) { exit 1 }
-    - &delete-all-images-except-base |
-      # Delete all images except the base image
-      $base_id = $(docker images -q $BASE_IMAGE)
-      foreach ($id in $(docker images -a -q | Get-Unique)) {
-        if ($id -ne $base_id) {
-          docker rmi -f $id
-        }
-      }
-    - docker system prune --force
   script:
     - |
       docker login -u $env:CIRCLECI_QUAY_USERNAME -p $env:CIRCLECI_QUAY_PASSWORD quay.io
@@ -1382,14 +1375,6 @@ build-push-windows-image:
     - echo "${IMAGE_NAME}:${IMAGE_TAG}" > tags
     - echo "${OLD_IMAGE_NAME}:${IMAGE_TAG}" >> tags
     - (Get-Content -Raw -Path tags) -replace "`r`n", "`n"| Set-Content -NoNewline tags_to_sign_${env:WIN_VERSION}
-  after_script:
-    - *get-base-image
-    - *delete-all-images-except-base
-    - docker system prune --force
-    - |
-      if (Test-Path -Path C:\Users\Administrator\Desktop\ops-scripts\docker-leak-check.exe) {
-        C:\Users\Administrator\Desktop\ops-scripts\docker-leak-check.exe -remove
-      }
   artifacts:
     paths:
       - tags_to_sign_${WIN_VERSION}
@@ -1403,14 +1388,18 @@ build-push-windows-fips-image:
   dependencies:
     - sign-exe
   tags:
-    - splunk-otel-collector-windows${WIN_VERSION}
+    - windows${WIN_VERSION}
+  image: mcr.microsoft.com/windows/servercore:ltsc${WIN_VERSION}
   retry: 2
   variables:
     ErrorActionPreference: stop
   before_script:
+    - . .gitlab/windows/runner-setup-helpers.ps1
+    - Install-Chocolatey
+    - Install-DockerCli
     - New-Item -Type dir .\cmd\otelcol\fips\dist
     - Copy-Item .\dist\signed\otelcol-fips_windows_amd64.exe .\cmd\otelcol\fips\dist\otelcol-fips_windows_amd64.exe
-    - &get-base-image |
+    - |
       if ($env:WIN_VERSION -eq "2019") {
         $BASE_IMAGE = $env:WIN_2019_BASE_IMAGE
       } else {
@@ -1419,15 +1408,6 @@ build-push-windows-fips-image:
     - |
       docker pull $BASE_IMAGE
       if ($LASTEXITCODE -ne 0) { exit 1 }
-    - &delete-all-images-except-base |
-      # Delete all images except the base image
-      $base_id = $(docker images -q $BASE_IMAGE)
-      foreach ($id in $(docker images -a -q | Get-Unique)) {
-        if ($id -ne $base_id) {
-          docker rmi -f $id
-        }
-      }
-    - docker system prune --force
   script:
     - |
       docker login -u $env:CIRCLECI_QUAY_USERNAME -p $env:CIRCLECI_QUAY_PASSWORD quay.io
@@ -1530,14 +1510,6 @@ build-push-windows-fips-image:
     - echo "${IMAGE_NAME}:${IMAGE_TAG}" > tags
     - echo "${OLD_IMAGE_NAME}:${IMAGE_TAG}" >> tags
     - (Get-Content -Raw -Path tags) -replace "`r`n", "`n"| Set-Content -NoNewline tags_to_sign_${env:WIN_VERSION}-fips
-  after_script:
-    - *get-base-image
-    - *delete-all-images-except-base
-    - docker system prune --force
-    - |
-      if (Test-Path -Path C:\Users\Administrator\Desktop\ops-scripts\docker-leak-check.exe) {
-        C:\Users\Administrator\Desktop\ops-scripts\docker-leak-check.exe -remove
-      }
   artifacts:
     paths:
       - tags_to_sign_${WIN_VERSION}-fips
@@ -1681,12 +1653,15 @@ release-installers:
 
 release-nupkg:
   extends: .trigger-filter
+  image: mcr.microsoft.com/windows/servercore:ltsc2022
   stage: release
   dependencies:
     - sign-msi
   tags:
-    - splunk-otel-collector-windows
+    - windows2022
   script:
+    - . .gitlab/windows/runner-setup-helpers.ps1
+    - Install-Chocolatey
     - |
       $ErrorActionPreference = 'Stop'
       Set-PSDebug -Trace 1
@@ -1705,6 +1680,7 @@ release-nupkg:
 
 choco-release:
   extends: .trigger-filter
+  image: mcr.microsoft.com/windows/servercore:ltsc2022
   stage: publish-release
   needs:
     - job: manual_release_trigger
@@ -1714,8 +1690,10 @@ choco-release:
     - job: github-release
       artifacts: false
   tags:
-    - splunk-otel-collector-windows
+    - windows2022
   script:
+    - . .gitlab/windows/runner-setup-helpers.ps1
+    - Install-Chocolatey
     - |
       $ErrorActionPreference = 'Stop'
       Set-PSDebug -Trace 1
@@ -1738,6 +1716,7 @@ choco-release:
         $should_release = $true
       }
       if ($should_release) {
+        choco config set --name="'defaultPushSource'" --value="'https://push.chocolatey.org/'"
         choco push -k $env:CHOCO_TOKEN .\dist\signed\splunk-otel-collector.${version}.nupkg
       } else {
         Write-Host "Skipping choco push - not a stable release tag or manual release"
@@ -1974,7 +1953,7 @@ github-release:
       - dist/assets
 
 .ansible:
-  image: 'cimg/python:3.9'
+  image: 'cimg/python:3.13'
   only:
     - /^ansible-v[0-9]+\.[0-9]+\.[0-9]+.*/
   except:
@@ -1994,7 +1973,7 @@ ansible-build:
     paths:
       - dist/
   before_script:
-    - pip3 install ansible==3.4.0
+    - pip3 install 'ansible~=12.0.0'
   script:
     - ansible-galaxy collection build ./deployments/ansible --output-path ./dist
 
@@ -2002,9 +1981,15 @@ ansible-release:
   extends: .ansible
   stage: release
   before_script:
-    - pip3 install ansible==3.4.0 yq==2.12.0
+    - pip3 install ansible~=12.0.0 yq~=3.0.0
   script:
-    - export COLLECTION_VERSION=$(cat ./deployments/ansible/galaxy.yml | yq .version -r)
+    - |
+      COLLECTION_VERSION=$(cat ./deployments/ansible/galaxy.yml | yq .version -r)
+      if [ -z "$COLLECTION_VERSION" ]; then
+        echo "ERROR: Failed to extract version from galaxy.yml" >&2
+        exit 1
+      fi
+      echo "Publishing collection version: $COLLECTION_VERSION"
     - ansible-galaxy collection publish ./dist/signalfx-splunk_otel_collector-${COLLECTION_VERSION}.tar.gz --token=${ANSIBLE_GALAXY_TOKEN}
 
 puppet-release:

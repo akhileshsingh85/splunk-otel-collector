@@ -1,5 +1,4 @@
 //go:build linux
-// +build linux
 
 package apache
 
@@ -46,5 +45,5 @@ type Monitor struct {
 
 // Configure configures and runs the plugin in collectd
 func (am *Monitor) Configure(conf *Config) error {
-	return am.SetConfigurationAndRun(conf)
+	return am.SetConfigurationAndRun(conf, collectd.WithDeprecationWarningLog("apachereceiver"))
 }

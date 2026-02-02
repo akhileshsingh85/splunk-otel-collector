@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
 )
@@ -43,9 +44,9 @@ func TestIncludeConfigSourceFactory_CreateConfigSource(t *testing.T) {
 		},
 		{
 			name:   "delete_files",
-			config: Config{DeleteFiles: true},
+			config: Config{DeleteFiles: true}, // SA1019: deprecated DeleteFiles
 			expected: &includeConfigSource{
-				Config:       &Config{DeleteFiles: true},
+				Config:       &Config{DeleteFiles: true}, // SA1019: deprecated DeleteFiles
 				watchedFiles: make(map[string]struct{}),
 			},
 		},
@@ -60,7 +61,7 @@ func TestIncludeConfigSourceFactory_CreateConfigSource(t *testing.T) {
 		{
 			name: "err_on_delete_and_watch",
 			config: Config{
-				DeleteFiles: true,
+				DeleteFiles: true, // SA1019: deprecated DeleteFiles
 				WatchFiles:  true,
 			},
 			wantErr: true,
@@ -72,12 +73,12 @@ func TestIncludeConfigSourceFactory_CreateConfigSource(t *testing.T) {
 			tt := tt
 			actual, err := factory.CreateConfigSource(context.Background(), &tt.config, zap.NewNop())
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, actual)
 				return
 			}
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotNil(t, actual)
 			assert.Equal(t, tt.expected, actual)
 		})

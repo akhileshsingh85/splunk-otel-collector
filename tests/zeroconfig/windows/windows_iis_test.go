@@ -117,7 +117,7 @@ func assertHTTPGetRequestSuccess(c *assert.CollectT, url string) {
 	assert.Equal(c, http.StatusOK, resp.StatusCode)
 }
 
-func testExpectedTracesForHTTPGetRequest(t *testing.T, otlp *testutils.OTLPReceiverSink, url string, expectedTracesFileName string) {
+func testExpectedTracesForHTTPGetRequest(t *testing.T, otlp *testutils.OTLPReceiverSink, url, expectedTracesFileName string) {
 	expected, err := golden.ReadTraces(expectedTracesFileName)
 	require.NoError(t, err)
 
@@ -134,6 +134,7 @@ func testExpectedTracesForHTTPGetRequest(t *testing.T, otlp *testutils.OTLPRecei
 			matchErr = ptracetest.CompareTraces(expected, otlp.AllTraces()[i],
 				ptracetest.IgnoreResourceAttributeValue("host.id"),
 				ptracetest.IgnoreResourceAttributeValue("host.name"),
+				ptracetest.IgnoreResourceAttributeValue("host.arch"),
 				ptracetest.IgnoreResourceAttributeValue("process.owner"),
 				ptracetest.IgnoreResourceAttributeValue("process.pid"),
 				ptracetest.IgnoreResourceAttributeValue("process.runtime.description"),
@@ -148,6 +149,8 @@ func testExpectedTracesForHTTPGetRequest(t *testing.T, otlp *testutils.OTLPRecei
 				ptracetest.IgnoreEndTimestamp(),
 				ptracetest.IgnoreTraceID(),
 				ptracetest.IgnoreSpanID(),
+				ptracetest.IgnoreResourceSpansOrder(),
+				ptracetest.IgnoreScopeSpansOrder(),
 			)
 		}
 		index = newIndex

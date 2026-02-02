@@ -16,7 +16,6 @@
 package components
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,8 +30,8 @@ func TestDefaultComponents(t *testing.T) {
 		"bearertokenauth",
 		"docker_observer",
 		"ecs_observer",
-		"ecs_task_observer",
 		"file_storage",
+		"googlecloudlogentry_encoding",
 		"headers_setter",
 		"health_check",
 		"host_observer",
@@ -43,6 +42,7 @@ func TestDefaultComponents(t *testing.T) {
 		"opamp",
 		"pprof",
 		"smartagent",
+		"text_encoding",
 		"zpages",
 	}
 	expectedReceivers := []string{
@@ -57,6 +57,7 @@ func TestDefaultComponents(t *testing.T) {
 		"azuremonitor",
 		"carbon",
 		"chrony",
+		"ciscoos",
 		"cloudfoundry",
 		"collectd",
 		"discovery",
@@ -69,6 +70,7 @@ func TestDefaultComponents(t *testing.T) {
 		"haproxy",
 		"hostmetrics",
 		"httpcheck",
+		"icmpcheckreceiver",
 		"iis",
 		"influxdb",
 		"jaeger",
@@ -111,6 +113,7 @@ func TestDefaultComponents(t *testing.T) {
 		"sshcheck",
 		"statsd",
 		"syslog",
+		"systemd",
 		"tcpcheck",
 		"tcplog",
 		"tlscheck",
@@ -146,15 +149,21 @@ func TestDefaultComponents(t *testing.T) {
 		"awss3",
 		"debug",
 		"file",
+		"googlecloudstorage",
 		"kafka",
 		"loadbalancing",
 		"nop",
-		"otlp",
-		"otlphttp",
+		"otlp_grpc",
+		"otlp_http",
+		"prometheusremotewrite",
 		"pulsar",
 		"sapm",
 		"signalfx",
 		"splunk_hec",
+	}
+	expectedExporterAliases := map[string]string{
+		"otlp":     "otlp_grpc",
+		"otlphttp": "otlp_http",
 	}
 	expectedConnectors := []string{
 		"count",
@@ -165,7 +174,7 @@ func TestDefaultComponents(t *testing.T) {
 	}
 
 	factories, err := Get()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	exts := factories.Extensions
 	assert.Len(t, exts, len(expectedExtensions))
@@ -177,6 +186,7 @@ func TestDefaultComponents(t *testing.T) {
 
 	recvs := factories.Receivers
 	assert.Len(t, recvs, len(expectedReceivers))
+
 	for _, k := range expectedReceivers {
 		v, ok := recvs[component.MustNewType(k)]
 		require.True(t, ok, k)
@@ -187,23 +197,28 @@ func TestDefaultComponents(t *testing.T) {
 	assert.Len(t, procs, len(expectedProcessors))
 	for _, k := range expectedProcessors {
 		v, ok := procs[component.MustNewType(k)]
-		require.True(t, ok, fmt.Sprintf("Missing expected processor %s", k))
+		require.True(t, ok, "Missing expected processor "+k)
 		assert.Equal(t, k, v.Type().String())
 	}
 
 	exps := factories.Exporters
-	assert.Len(t, exps, len(expectedExporters))
+	assert.Len(t, exps, len(expectedExporters)+len(expectedExporterAliases))
 	for _, k := range expectedExporters {
 		v, ok := exps[component.MustNewType(k)]
 		require.True(t, ok)
 		assert.Equal(t, k, v.Type().String())
+	}
+	for alias, actual := range expectedExporterAliases {
+		v, ok := exps[component.MustNewType(alias)]
+		require.True(t, ok, "Missing expected exporter alias "+alias)
+		assert.Equal(t, actual, v.Type().String())
 	}
 
 	conns := factories.Connectors
 	assert.Len(t, conns, len(expectedConnectors))
 	for _, k := range expectedConnectors {
 		v, ok := conns[component.MustNewType(k)]
-		require.True(t, ok, fmt.Sprintf("Missing expected connector %s", k))
+		require.True(t, ok, "Missing expected connector "+k)
 		assert.Equal(t, k, v.Type().String())
 	}
 }

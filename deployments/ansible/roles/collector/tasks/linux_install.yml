@@ -4,7 +4,6 @@
 - name: Set Linux packages sources
   ansible.builtin.set_fact:
     splunk_repo_base_url: https://splunk.jfrog.io/splunk
-    td_agent_repo_base: https://packages.treasuredata.com
 
 - name: Install Splunk OpenTelemetry Collector with apt package manager
   ansible.builtin.import_tasks: apt_install_otel_collector.yml
@@ -25,12 +24,13 @@
   ansible.builtin.template:
     src: collector-service-proxy.conf.j2
     dest: /etc/systemd/system/splunk-otel-collector.service.d/service-proxy.conf
+    mode: '644'
   notify: "restart splunk-otel-collector"
   when: splunk_otel_collector_proxy_http != "" or splunk_otel_collector_proxy_https != ""
 
 - name: Set default hec token
-  set_fact:
-    splunk_hec_token: "{{splunk_access_token}}"
+  ansible.builtin.set_fact:
+    splunk_hec_token: "{{ splunk_access_token }}"
   when: splunk_hec_token is not defined or (splunk_hec_token | trim) == ""
 
 - name: Set up env file for Splunk OTel Collector service
@@ -48,8 +48,9 @@
 
 - name: Copy the custom config
   ansible.builtin.copy:
-    content: '{{ updated_config | to_nice_yaml (indent=2) }}'
+    content: '{{ updated_config | to_nice_yaml(indent=2) }}'
     dest: "{{ splunk_otel_collector_config }}"
+    mode: '644'
   when: splunk_config_override != ''
   notify: "restart splunk-otel-collector"
 
@@ -62,10 +63,6 @@
     mode: 0644
   when: splunk_otel_collector_config_source != ''
   notify: "restart splunk-otel-collector"
-
-- name: Install FluentD
-  ansible.builtin.import_tasks: linux_install_fluentd.yml
-  when: install_fluentd and fluentd_supported
 
 - name: Install Splunk OpenTelemetry Auto Instrumentation
   ansible.builtin.import_tasks: linux_auto_instrumentation.yml

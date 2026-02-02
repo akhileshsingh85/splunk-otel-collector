@@ -58,7 +58,7 @@ type Config struct {
 	TopQueryLimit int `default:"10" yaml:"topQueryLimit"`
 }
 
-func (c *Config) connStr() (template string, port string, err error) {
+func (c *Config) connStr() (template, port string, err error) {
 	connStr := c.ConnectionString
 	port = "5432"
 	if c.Host != "" {
@@ -69,7 +69,7 @@ func (c *Config) connStr() (template string, port string, err error) {
 		port = strconv.Itoa(int(c.Port))
 	}
 	template, err = utils.RenderSimpleTemplate(connStr, c.Params)
-	return
+	return template, port, err
 }
 
 // Monitor that collects postgresql stats
@@ -109,6 +109,7 @@ func (m *Monitor) Configure(conf *Config) error {
 		"host":        conf.Host,
 		"port":        conf.Port,
 	})
+	m.logger.Warn("[NOTICE] The postgresql monitor is deprecated and will be removed on or after April 2026. Please use the postgresql receiver instead.")
 
 	queriesGroupEnabled := m.Output.HasEnabledMetricInGroup(groupQueries)
 	replicationGroupEnabled := m.Output.HasEnabledMetricInGroup(groupReplication)
